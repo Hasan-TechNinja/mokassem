@@ -12,6 +12,7 @@ from rest_framework.views import APIView
 from rest_framework import permissions, status
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
 
 # Create your views here.
 
@@ -103,3 +104,29 @@ class VerifyEmailView(APIView):
 
 class EmailLoginView(TokenObtainPairView):
     serializer_class = EmailTokenObtainPairSerializer
+
+
+class LogoutView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        refresh_token = request.data.get("refresh")
+
+        if refresh_token is None:
+            return Response({"detail": "Refresh token is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            # Create token object from the refresh token string
+            token = RefreshToken(refresh_token)
+
+            # Blacklist the token
+            token.blacklist()
+
+            return Response({"detail": "Logout successful."}, status=status.HTTP_205_RESET_CONTENT)
+
+        except InvalidToken:
+            return Response({"detail": "The token is invalid or expired."}, status=status.HTTP_400_BAD_REQUEST)
+        except TokenError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            return Response({"detail": "An unexpected error occurred."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

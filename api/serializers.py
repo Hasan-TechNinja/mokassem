@@ -95,3 +95,28 @@ class EmailTokenObtainPairSerializer(serializers.Serializer):
             'refresh': str(refresh),
             'access': str(refresh.access_token),
         }
+    
+
+
+class PasswordResetRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+    def validate_email(self, value):
+        if not User.objects.filter(email=value).exists():
+            raise serializers.ValidationError("User with this email does not exist.")
+        return value
+
+    def create(self, validated_data):
+        user = User.objects.get(email=validated_data['email'])
+        code = str(random.randint(1000, 9999))
+
+        EmailVerification.objects.create(user=user, code=code)
+
+        send_mail(
+            'Password Reset Code',
+            f'Your password reset code is {code}',
+            'noreply@example.com',
+            [user.email],
+            fail_silently=False
+        )
+        return validated_data
