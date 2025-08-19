@@ -5,11 +5,13 @@ from django.contrib.auth.models import User
 import random
 from django.core.mail import send_mail
 from django.contrib.auth import authenticate, login
+from api.serializers import EmailTokenObtainPairSerializer
 
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import permissions, status
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import TokenObtainPairView
 
 # Create your views here.
 
@@ -97,3 +99,7 @@ class VerifyEmailView(APIView):
             return Response({"error": "User with this email dose not exist."}, status= status.HTTP_400_BAD_REQUEST)
         except EmailVerification.DoesNotExist:
             return Response({"error": "No verificaiton record found for this user."}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class EmailLoginView(TokenObtainPairView):
+    serializer_class = EmailTokenObtainPairSerializer
