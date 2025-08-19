@@ -150,3 +150,37 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
 
         except (User.DoesNotExist, EmailVerification.DoesNotExist):
             raise serializers.ValidationError("Invalid code or email.")
+        
+
+
+class ProfileSerializer(serializers.ModelSerializer):
+    # Mapping the user fields (first_name, last_name) to the profile serializer
+    first_name = serializers.CharField(source='user.first_name', required=False, allow_blank=True)
+    last_name = serializers.CharField(source='user.last_name', required=False, allow_blank=True)
+    email = serializers.EmailField(source='user.email', read_only=True, validators=[UniqueValidator(queryset=User.objects.all(), message="This email is already in use.")])
+    
+    # Profile fields
+    phone = serializers.CharField(required=False, allow_blank=True)
+    image = serializers.ImageField(required=False, allow_null=True)
+
+    class Meta:
+        model = Profile
+        fields = ["first_name", "last_name", "email", "phone", "image"]
+
+    def update(self, instance, validated_data):
+        """
+        Custom update method to handle updating both user and profile fields.
+        """
+        # Handle the user fields (first_name, last_name)
+        user_data = validated_data.pop('user', {})
+        user = instance.user
+
+        # Update user fields if provided in the request
+        if 'first_name' in user_data:
+            user.first_name = user_data['first_name']
+        if 'last_name' in user_data:
+            user.last_name = user_data['last_name']
+        user.save()
+
+        # Now update the profile fields (phone, image)
+        return super().update(instance, validated_data)

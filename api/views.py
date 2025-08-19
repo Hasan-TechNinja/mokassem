@@ -1,6 +1,6 @@
 from django.shortcuts import render, redirect
-from authentication.models import EmailVerification, PasswordResetCode
-from .serializers import PasswordResetConfirmSerializer, RegistrationSerializer
+from authentication.models import EmailVerification, PasswordResetCode, Profile
+from .serializers import PasswordResetConfirmSerializer, RegistrationSerializer, ProfileSerializer
 from django.contrib.auth.models import User
 import random
 from django.core.mail import send_mail
@@ -212,3 +212,34 @@ class PasswordResetConfirmView(APIView):
                 return Response({"error": "User with this email does not exist."}, status=status.HTTP_404_NOT_FOUND)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+
+class ProfileView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        """
+        Retrieve the authenticated user's profile including user fields (first_name, last_name, email).
+        """
+        user = request.user
+        profile, created = Profile.objects.get_or_create(user=user)  # Ensure profile exists
+        profile_data = ProfileSerializer(profile).data  # Serialize profile including user data
+        return Response(profile_data, status=status.HTTP_200_OK)
+
+    def put(self, request):
+        """
+        Update the authenticated user's profile and user fields (first_name, last_name).
+        """
+        user = request.user
+        profile, created = Profile.objects.get_or_create(user=user)  # Ensure profile exists
+
+        # Update the profile fields using the serializer
+        serializer = ProfileSerializer(profile, data=request.data, partial=True)
+
+        if serializer.is_valid():
+            serializer.save()  # Save the updated profile data
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
