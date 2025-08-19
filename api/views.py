@@ -1,11 +1,12 @@
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from authentication.models import EmailVerification, PasswordResetCode
-from .serializers import RegistrationSerializer
+from .serializers import PasswordResetConfirmSerializer, RegistrationSerializer
 from django.contrib.auth.models import User
 import random
 from django.core.mail import send_mail
 from django.contrib.auth import authenticate, login
 from api.serializers import EmailTokenObtainPairSerializer
+from django.contrib.auth.hashers import make_password
 
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -130,3 +131,84 @@ class LogoutView(APIView):
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception:
             return Response({"detail": "An unexpected error occurred."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+
+
+class PasswordResetRequestView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        email = request.data.get('email')
+        if not email:
+            return Response({"error": "Email is required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            user = User.objects.get(email = email)
+            if user.is_active == False:
+                return redirect("")
+            
+            PasswordResetCode.objects.filter(user = user).delete()
+
+            code = str(random.randint(100000, 999999))
+            PasswordResetCode.objects.create(user = user, code = code)
+
+            if user.first_name:
+                name = user.first_name
+            elif user.email:
+                name = user.email
+            else:
+                name = user.username
+
+            send_mail(
+                subject="Password reset Request",
+                message=(
+                    f"Hello, {name}\n"
+                        "We received a request to reset your account password.\n"
+                        f"Your password reset code is: "
+                        f"{code}\n\n"
+                        "If you did not request this, please ignore this email.\n"
+                        "For security, this code will expire in 3 minutes.\n\n"
+                        "Best regards,\n"
+                        "The 1 Step Coach Live Team"
+                ),
+                from_email='noreply@example.com',
+                recipient_list=[email],
+                fail_silently=False
+            )
+            return Response({"message": "A password reset code has been sent to your email."}, status=status.HTTP_200_OK)
+
+        except User.DoesNotExist:
+            return Response({"error": "User with this email does not exist."}, status=status.HTTP_404_NOT_FOUND)
+        
+
+
+class PasswordResetConfirmView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        serializer = PasswordResetConfirmSerializer(data=request.data)
+
+        if serializer.is_valid():
+            email = serializer.validated_data['email']
+            code = serializer.validated_data['code']
+            new_password = serializer.validated_data['new_password']
+
+            try:
+                user = User.objects.get(email=email)
+
+                password_reset = PasswordResetCode.objects.filter(user=user, code=code).first()
+
+                if not password_reset:
+                    return Response({"error": "Invalid or expired reset code."}, status=status.HTTP_400_BAD_REQUEST)
+
+                user.password = make_password(new_password)
+                user.save()
+
+                password_reset.delete()
+
+                return Response({'detail': 'Password has been reset.'}, status=status.HTTP_200_OK)
+
+            except User.DoesNotExist:
+                return Response({"error": "User with this email does not exist."}, status=status.HTTP_404_NOT_FOUND)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

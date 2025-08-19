@@ -120,3 +120,33 @@ class PasswordResetRequestSerializer(serializers.Serializer):
             fail_silently=False
         )
         return validated_data
+    
+
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    code = serializers.CharField()
+    new_password = serializers.CharField(write_only=True, validators=[validate_password])
+    confirm_password = serializers.CharField(write_only=True)
+
+    def validate(self, data):
+        if data['new_password'] != data['confirm_password']:
+            raise serializers.ValidationError("Passwords do not match.")
+        return data
+
+    def save(self, **kwargs):
+        try:
+            user = User.objects.get(email=self.validated_data['email'])
+            verification = EmailVerification.objects.filter(
+                user=user, code=self.validated_data['code']).latest('created_at')
+
+            if verification.is_expired():
+                raise serializers.ValidationError("Code has expired.")
+
+            user.set_password(self.validated_data['new_password'])
+            user.save()
+
+            # Optionally, delete used codes
+            EmailVerification.objects.filter(user=user).delete()
+
+        except (User.DoesNotExist, EmailVerification.DoesNotExist):
+            raise serializers.ValidationError("Invalid code or email.")
