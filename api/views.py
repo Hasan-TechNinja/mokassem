@@ -111,16 +111,16 @@ class LogoutView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
+        
         refresh_token = request.data.get("refresh")
 
-        if refresh_token is None:
+        if not refresh_token:
             return Response({"detail": "Refresh token is required."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            # Create token object from the refresh token string
+
             token = RefreshToken(refresh_token)
 
-            # Blacklist the token
             token.blacklist()
 
             return Response({"detail": "Logout successful."}, status=status.HTTP_205_RESET_CONTENT)
@@ -129,8 +129,8 @@ class LogoutView(APIView):
             return Response({"detail": "The token is invalid or expired."}, status=status.HTTP_400_BAD_REQUEST)
         except TokenError as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        except Exception:
-            return Response({"detail": "An unexpected error occurred."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Exception as e:
+            return Response({"detail": f"An unexpected error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
 
 
@@ -218,26 +218,21 @@ class ProfileView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        """
-        Retrieve the authenticated user's profile including user fields (first_name, last_name, email).
-        """
+
         user = request.user
-        profile, created = Profile.objects.get_or_create(user=user)  # Ensure profile exists
-        profile_data = ProfileSerializer(profile).data  # Serialize profile including user data
+        profile, created = Profile.objects.get_or_create(user=user)
+        profile_data = ProfileSerializer(profile).data
         return Response(profile_data, status=status.HTTP_200_OK)
 
     def put(self, request):
-        """
-        Update the authenticated user's profile and user fields (first_name, last_name).
-        """
-        user = request.user
-        profile, created = Profile.objects.get_or_create(user=user)  # Ensure profile exists
 
-        # Update the profile fields using the serializer
+        user = request.user
+        profile, created = Profile.objects.get_or_create(user=user)
+
         serializer = ProfileSerializer(profile, data=request.data, partial=True)
 
         if serializer.is_valid():
-            serializer.save()  # Save the updated profile data
+            serializer.save()
             return Response(serializer.data, status=status.HTTP_200_OK)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
