@@ -8,6 +8,8 @@ import string
 from django.core.mail import send_mail
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from subscription.models import SubscriptionPlan, UserSubscription
+
 
 
 class RegistrationSerializer(serializers.ModelSerializer):
@@ -183,4 +185,26 @@ class ProfileSerializer(serializers.ModelSerializer):
         user.save()
 
         # Now update the profile fields (phone, image)
+        return super().update(instance, validated_data)
+
+
+class SubscriptionPlanSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SubscriptionPlan
+        fields = ['id', 'name', 'price', 'duration_days', 'features', 'plan_type']
+        orders = ['-price']
+
+
+class UserSubscriptionSerializer(serializers.ModelSerializer):
+    plan = SubscriptionPlanSerializer()  # Nested SubscriptionPlan serializer
+
+    class Meta:
+        model = UserSubscription
+        fields = ['id', 'user', 'plan', 'start_date', 'end_date', 'is_active', 'last_renewed']
+    
+    def update(self, instance, validated_data):
+        plan_data = validated_data.pop('plan', None)
+        if plan_data:
+            plan = SubscriptionPlan.objects.get(id=plan_data['id'])
+            instance.plan = plan
         return super().update(instance, validated_data)

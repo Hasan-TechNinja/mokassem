@@ -21,6 +21,8 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
 from rest_framework_simplejwt.views import TokenBlacklistView
+from django.conf import settings
+from django.conf.urls.static import static
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -29,3 +31,6 @@ urlpatterns = [
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 
 ]
+
+# Static files handling (e.g., media files)
+urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

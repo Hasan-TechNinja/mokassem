@@ -79,6 +79,10 @@ TEMPLATES = [
 WSGI_APPLICATION = 'mokassem.wsgi.application'
 
 
+STRIPE_SECRET_KEY = config("STRIPE_SECRET_KEY")
+STRIPE_WEBHOOK_SECRET = config("STRIPE_WEBHOOK_SECRET")
+
+
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
