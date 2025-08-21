@@ -21,4 +21,6 @@ urlpatterns = [
     path('subscription-plans/', views.SubscriptionPlanView.as_view(), name='report'),
     path('webhooks/stripe/', views.StripeWebhookView.as_view(), name='stripe-webhook'),
     path('subscription/', include(router.urls)),
+    path('payments/success/<int:subscription_id>/', views.SuccessView.as_view(), name='suggestion-categories'),
+    path('payments/cancel/', views.CancelPaymentView.as_view(), name='cancel_payment'),
 ]
