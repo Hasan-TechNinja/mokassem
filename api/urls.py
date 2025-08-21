@@ -18,9 +18,16 @@ urlpatterns = [
     #Profile paths
     path('profile/', views.ProfileView.as_view(), name='profile'),
 
-    path('subscription-plans/', views.SubscriptionPlanView.as_view(), name='report'),
+    # Webhook endpoint for Stripe
     path('webhooks/stripe/', views.StripeWebhookView.as_view(), name='stripe-webhook'),
+    
+    # Subscription plans
+    path('subscription-plans/', views.SubscriptionPlanView.as_view(), name='subscription-plans'),
+    
+    # Subscription-related endpoints
     path('subscription/', include(router.urls)),
+    
+    # Payment success and cancellation
     path('payments/success/<int:subscription_id>/', views.SuccessView.as_view(), name='suggestion-categories'),
-    path('payments/cancel/', views.CancelPaymentView.as_view(), name='cancel_payment'),
+    # path('payments/cancel/', views.CancelPaymentView.as_view(), name='cancel_payment'),
 ]

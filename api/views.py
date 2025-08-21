@@ -274,7 +274,6 @@ class SubscriptionPlanView(APIView):
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-
 # Set Stripe API Key
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
@@ -283,7 +282,7 @@ class UserSubscriptionViewSet(viewsets.GenericViewSet):
     '''Subscription add demo
     
     ["Basic AI Chat", "Daily Check-ins", "Milestone Tracking", "Voice Responses", "Advanced Analytics", "Personalized Content", "Priority Support"]
-'''
+    '''
     queryset = UserSubscription.objects.all()
     serializer_class = UserSubscriptionSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -353,7 +352,7 @@ class UserSubscriptionViewSet(viewsets.GenericViewSet):
                 start_date=timezone.now(),
             )
 
-        # Create Stripe Checkout Session
+        # Create Stripe Checkout Session for Subscription
         try:
             checkout_session = stripe.checkout.Session.create(
                 payment_method_types=['card'],
@@ -364,11 +363,14 @@ class UserSubscriptionViewSet(viewsets.GenericViewSet):
                         'product_data': {
                             'name': plan.name,
                         },
-                        'unit_amount': int(plan.price * 100),
+                        'recurring': {
+                            'interval': 'month',  # or 'year' depending on your plan setup
+                        },
+                        'unit_amount': int(plan.price * 100),  # Amount in cents
                     },
                     'quantity': 1,
                 }],
-                mode='payment',
+                mode='subscription',  # Use subscription mode
                 success_url=request.build_absolute_uri(f'/payments/success/{user_subscription.id}/'),
                 cancel_url=request.build_absolute_uri('/payments/cancel/'),
                 metadata={
@@ -383,43 +385,64 @@ class UserSubscriptionViewSet(viewsets.GenericViewSet):
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-
     @action(detail=False, methods=['post'])
     def cancel(self, request):
         """Cancel the active subscription for the authenticated user."""
         try:
             user_subscription = self.get_queryset().get(is_active=True)
+
+            # Cancel subscription on Stripe
+            stripe.Subscription.delete(user_subscription.stripe_subscription_id)
+
+            # Deactivate subscription locally
             user_subscription.is_active = False
             user_subscription.save()
+
             serializer = self.get_serializer(user_subscription)
             return Response(serializer.data, status=status.HTTP_200_OK)
         except UserSubscription.DoesNotExist:
             return Response({"message": "No active subscription found to cancel."},
                              status=status.HTTP_404_NOT_FOUND)
+        except stripe.error.StripeError as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=False, methods=['post'])
     def renew(self, request):
         """Renew the user's subscription."""
         try:
-            user_subscription = self.get_queryset().get(is_active=True)
-            # Renew logic: Extend the end_date by the plan's duration
-            if user_subscription.plan.duration_days:
-                user_subscription.end_date += timedelta(days=user_subscription.plan.duration_days)
-                user_subscription.last_renewed = timezone.now()
-                user_subscription.save()
-                serializer = self.get_serializer(user_subscription)
-                return Response(serializer.data, status=status.HTTP_200_OK)
+            user_subscription = self.get_queryset().get(is_active=False)  # Ensure it's not active already
 
-            return Response({"message": "This plan does not support renewal."},
-                             status=status.HTTP_400_BAD_REQUEST)
-        except UserSubscription.DoesNotExist:
-            return Response({"message": "No active subscription found to renew."},
-                             status=status.HTTP_404_NOT_FOUND)
+            # Recreate the Stripe subscription
+            stripe_subscription = stripe.Subscription.create(
+                customer=user_subscription.user.stripe_customer_id,  # Assuming you store this ID
+                items=[{
+                    'price': user_subscription.plan.stripe_price_id,  # Assuming you store this price ID
+                }],
+                expand=['latest_invoice.payment_intent']
+            )
+
+            # Update local subscription status
+            user_subscription.stripe_subscription_id = stripe_subscription.id
+            user_subscription.is_active = True
+            user_subscription.start_date = timezone.now()
+            user_subscription.save()
+
+            serializer = self.get_serializer(user_subscription)
+            return Response(serializer.data, status=status.HTTP_200_OK)
         
+        except UserSubscription.DoesNotExist:
+            return Response({"message": "No inactive subscription found to renew."},
+                             status=status.HTTP_404_NOT_FOUND)
+        except stripe.error.StripeError as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+
+
+# Set Stripe API key
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
 class StripeWebhookView(APIView):
-
+    
     @csrf_exempt
     def post(self, request, *args, **kwargs):
         # Retrieve the request's body as a string
@@ -444,26 +467,33 @@ class StripeWebhookView(APIView):
         if event['type'] == 'checkout.session.completed':
             session = event['data']['object']
 
-            # Get the subscription ID and user ID from the metadata
-            subscription_id = session['metadata']['subscription_id']
-            user_id = session['metadata']['user_id']
+            # Extract subscription and user IDs from the metadata
+            subscription_id = session['metadata'].get('subscription_id')
+            user_id = session['metadata'].get('user_id')
 
-            # Fetch the subscription object
+            # Ensure metadata is present
+            if not subscription_id or not user_id:
+                return JsonResponse({'message': 'Missing metadata in event'}, status=400)
+
+            # Fetch the user subscription object using the subscription ID and user ID
             user_subscription = get_object_or_404(UserSubscription, id=subscription_id, user_id=user_id)
 
-            # Update subscription status to active
+            # Update the subscription status to active
             user_subscription.is_active = True
+            user_subscription.stripe_subscription_id = session['subscription']  # Store the Stripe subscription ID
             user_subscription.save()
 
             # Optionally: You can set the end date, last renewed, etc.
-            # user_subscription.end_date = calculate_end_date_based_on_plan(user_subscription.plan)
-            # user_subscription.last_renewed = timezone.now()
-            # user_subscription.save()
+            # For example, if your plan has a duration, you can calculate the end date.
+            if user_subscription.plan.duration_days:
+                user_subscription.end_date = timezone.now() + timedelta(days=user_subscription.plan.duration_days)
+                user_subscription.last_renewed = timezone.now()
+                user_subscription.save()
 
             # Respond with a success message
             return JsonResponse({'status': 'success'}, status=200)
 
-        # Unexpected event type
+        # Handle other event types if necessary
         return JsonResponse({'message': 'Event type not supported'}, status=400)
     
 
@@ -521,62 +551,6 @@ class CancelPaymentView(APIView):
 
         except UserSubscription.DoesNotExist:
             return Response({"error": "Subscription not found."}, status=status.HTTP_404_NOT_FOUND)
-        
-        
-        
-class SuccessView(APIView):
-    """
-    Handle successful Stripe payments. Activate the subscription.
-    """
-
-    def get(self, request, subscription_id):
-        try:
-            subscription = UserSubscription.objects.get(id=subscription_id)
-
-            # Activate the subscription
-            subscription.is_active = True
-            subscription.start_date = timezone.now()
-            subscription.save()
-
-            return Response({
-                "message": "Subscription activated successfully!",
-                "subscription_id": subscription.id,
-                "plan": subscription.plan.name,
-                "user": subscription.user.email,
-                "active": subscription.is_active,
-                "start_date": subscription.start_date,
-            }, status=status.HTTP_200_OK)
-
-        except UserSubscription.DoesNotExist:
-            return Response({"error": "Subscription not found."}, status=status.HTTP_404_NOT_FOUND)
-        
-
-
-class CancelPaymentView(APIView):
-    """
-    Handle cancellation of Stripe payments and deactivate the subscription.
-    """
-
-    def post(self, request, subscription_id):
-        try:
-            subscription = UserSubscription.objects.get(id=subscription_id)
-
-            # Deactivate the subscription
-            subscription.is_active = False
-            subscription.end_date = timezone.now()  # Set end date as now
-            subscription.save()
-
-            return Response({
-                "message": "Subscription canceled successfully.",
-                "subscription_id": subscription.id,
-                "plan": subscription.plan.name,
-                "user": subscription.user.email,
-                "active": subscription.is_active,
-                "end_date": subscription.end_date,
-            }, status=status.HTTP_200_OK)
-
-        except UserSubscription.DoesNotExist:
-            return Response({"error": "Subscription not found."}, status=status.HTTP_404_NOT_FOUND)
-
+         
     
 # --------------------------------------- End of Subscription --------------------------------------------------------
