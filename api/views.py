@@ -7,7 +7,7 @@ import random
 import stripe
 from django.core.mail import send_mail
 from django.contrib.auth import authenticate, login
-from api.serializers import EmailTokenObtainPairSerializer
+from api.serializers import EmailTokenObtainPairSerializer, AboutSerializer
 from django.contrib.auth.hashers import make_password
 from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
@@ -15,6 +15,7 @@ from django.http import JsonResponse
 from django.utils import timezone 
 from datetime import timedelta, date
 from django.shortcuts import get_object_or_404
+from main.models import About
 
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -554,3 +555,10 @@ class CancelPaymentView(APIView):
          
     
 # --------------------------------------- End of Subscription --------------------------------------------------------
+
+class AboutView(APIView):
+    def get(self, request):
+        about = About.objects.all()
+        serializer = AboutSerializer(about, many = True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+

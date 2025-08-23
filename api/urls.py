@@ -30,4 +30,6 @@ urlpatterns = [
     # Payment success and cancellation
     path('payments/success/<int:subscription_id>/', views.SuccessView.as_view(), name='suggestion-categories'),
     # path('payments/cancel/', views.CancelPaymentView.as_view(), name='cancel_payment'),
+
+    path('about/', views.AboutView.as_view(), name='about'),
 ]

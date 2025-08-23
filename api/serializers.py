@@ -9,7 +9,7 @@ from django.core.mail import send_mail
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from subscription.models import SubscriptionPlan, UserSubscription
-
+from main.models import About
 
 
 class RegistrationSerializer(serializers.ModelSerializer):
@@ -208,3 +208,10 @@ class UserSubscriptionSerializer(serializers.ModelSerializer):
             plan = SubscriptionPlan.objects.get(id=plan_data['id'])
             instance.plan = plan
         return super().update(instance, validated_data)
+    
+
+class AboutSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = About
+        fields = ["id", "title", "description", "mission", "vision"]
+        
