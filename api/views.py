@@ -1,7 +1,7 @@
 from django.shortcuts import render, redirect
 from authentication.models import EmailVerification, PasswordResetCode, Profile
 from subscription.models import SubscriptionPlan, UserSubscription
-from .serializers import PasswordResetConfirmSerializer, RegistrationSerializer, ProfileSerializer, SubscriptionPlanSerializer, UserSubscriptionSerializer
+from .serializers import PasswordResetConfirmSerializer, RegistrationSerializer, ProfileSerializer, SubscriptionPlanSerializer, UserSubscriptionSerializer, SearchHistorySerializer
 from django.contrib.auth.models import User
 import random
 import stripe
@@ -15,7 +15,7 @@ from django.http import JsonResponse
 from django.utils import timezone 
 from datetime import timedelta, date
 from django.shortcuts import get_object_or_404
-from main.models import About
+from main.models import About, SearchHistory
 
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -25,6 +25,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
 from rest_framework import viewsets
 from rest_framework.decorators import action
+from rest_framework.pagination import PageNumberPagination
 
 # Create your views here.
 
@@ -562,3 +563,25 @@ class AboutView(APIView):
         serializer = AboutSerializer(about, many = True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+
+class SearchHistoryView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        qs = SearchHistory.objects.filter(user=request.user).order_by("-created_at")
+
+        # DRF pagination with APIView
+        paginator = PageNumberPagination()
+        paginator.page_size = 50   # or rely on REST_FRAMEWORK PAGE_SIZE
+        page = paginator.paginate_queryset(qs, request)
+
+        serializer = SearchHistorySerializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data)
+
+    def post(self, request):
+        serializer = SearchHistorySerializer(data=request.data)
+        if serializer.is_valid():
+            # enforce the authenticated user; ignore any user field in payload
+            serializer.save(user=request.user)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

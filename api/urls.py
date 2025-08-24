@@ -32,4 +32,5 @@ urlpatterns = [
     # path('payments/cancel/', views.CancelPaymentView.as_view(), name='cancel_payment'),
 
     path('about/', views.AboutView.as_view(), name='about'),
+    path('search/', views.SearchHistoryView.as_view(), name='search')
 ]

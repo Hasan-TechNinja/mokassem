@@ -9,7 +9,7 @@ from django.core.mail import send_mail
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from subscription.models import SubscriptionPlan, UserSubscription
-from main.models import About
+from main.models import About, SearchHistory
 
 
 class RegistrationSerializer(serializers.ModelSerializer):
@@ -215,3 +215,12 @@ class AboutSerializer(serializers.ModelSerializer):
         model = About
         fields = ["id", "title", "description", "mission", "vision"]
         
+
+
+class SearchHistorySerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source="user.username", read_only=True)
+
+    class Meta:
+        model = SearchHistory
+        fields = ["id", "username", "text", "created_at"]  # omit raw user id in API
+        read_only_fields = ["username", "created_at"]
