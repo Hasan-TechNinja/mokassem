@@ -1,4 +1,4 @@
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from authentication.models import EmailVerification, PasswordResetCode, Profile
 from subscription.models import SubscriptionPlan, UserSubscription
 from .serializers import PasswordResetConfirmSerializer, RegistrationSerializer, ProfileSerializer, SubscriptionPlanSerializer, UserSubscriptionSerializer, SearchHistorySerializer
@@ -585,3 +585,23 @@ class SearchHistoryView(APIView):
             serializer.save(user=request.user)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+class SearchDetailsView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_object(self, id, user):
+        # Ensures only the owner can access their own search history
+        return get_object_or_404(SearchHistory, id=id, user=user)
+
+    def put(self, request, id):
+        obj = self.get_object(id, request.user)
+        serializer = SearchHistorySerializer(obj, data=request.data)  # full update
+        if serializer.is_valid():
+            serializer.save(user=request.user)  # enforce ownership
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, id):
+        obj = self.get_object(id, request.user)
+        obj.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
