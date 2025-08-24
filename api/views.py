@@ -510,9 +510,9 @@ class SuccessView(APIView):
             subscription = UserSubscription.objects.get(id=subscription_id)
 
             # Activate the subscription
-            subscription.is_active = True
-            subscription.start_date = timezone.now()
-            subscription.save()
+            # subscription.is_active = True
+            # subscription.start_date = timezone.now()
+            # subscription.save()
 
             return Response({
                 "message": "Subscription activated successfully!",
